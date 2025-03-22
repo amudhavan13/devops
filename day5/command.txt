@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+name: my-deploy
+labels:
+name: my-deploy
+spec:
+replicas: 1
+selector:
+matchLabels:
+apptype: web-backend
+strategy:
+type: RollingUpdate
+template:
+metadata:
+labels:
+apptype: web-backend
+spec:
+containers:
+- name: my-web
+image: sanchaym/simplewebapp:latest
+ports:
+- containerPort: 9001
+---
+apiVersion: v1
+kind: Service
+metadata:
+name: my-service
+labels:
+app: my-servicespec:
+type: NodePort
+ports:
+- port: 9001
+targetPort: 8080
+nodePort: 30005
+selector:
+apptype: web-backend
+Script:
+pipeline {
+agent any
+tools {maven 'mvn'}
+stages {
+stage('scm') {
+steps {
+git 'https://github.com/Sanchay1054/WarProject.git'
+}
+}
+stage('clean') {
+steps {
+sh "mvn clean"
+}
+}
+stage('validate') {
+steps {
+sh "mvn validate"
+}
+}
+stage('compile') {
+steps {
+sh "mvn compile"}
+}
+stage('test') {
+steps {
+sh "mvn test"
+}
+}
+stage('package') {
+steps {
+sh "mvn package"
+}
+}
+stage('build to images') {
+steps {
+script{
+sh 'docker build -t sanchaym/simplewebapp .'
+}
+}
+}
+stage('push to hub') {
+steps {
+script{
+withDockerRegistry(credentialsId: 'Docker', url: 'https://index.docker.io/v1/') {
+sh 'docker push sanchaym/simplewebapp'
+}
+}
+}
+}
+stage('deploy') {
+steps {withKubeConfig(caCertificate: '', clusterName: 'minikube', contextName: 'minikube',
+credentialsId: 'minikube_cred', namespace: '', restrictKubeConfigAccess: false, serverUrl:
+'https://192.168.39.226:8443') {
+sh 'kubectl delete all --all'
+sh 'kubectl apply -f deployment.yml --validate=false'
+}
+}
+}
+}
+}
